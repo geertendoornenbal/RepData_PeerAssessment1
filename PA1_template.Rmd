@@ -8,6 +8,7 @@ output:
 ```{r,results="hide"}
 require(dplyr)
 require(ggplot2)
+require(lubridate)
 ```
 ## Loading and preprocessing the data
 
@@ -32,13 +33,70 @@ mean(stepsPerDay$stepsPerDay)
 median(stepsPerDay$stepsPerDay)
 ```
 
-
 ## What is the average daily activity pattern?
+Timeseries over the intervals, with the average number of steps over days
+```{r}
+groupedInterval <- group_by(activities,interval)
+intervalSummary <- summarise(groupedInterval, averageSteps = mean(steps,na.rm= TRUE))
+with(intervalSummary,qplot(x = interval, y = averageSteps, geom = "line"))
+```
 
+Maximum number of steps averaged over days
 
+```{r}
+intervalSummary[intervalSummary$averageSteps ==max(intervalSummary$averageSteps),1]$interval
+```
 
 ## Imputing missing values
 
+Total number of NA's:
+```{r}
+sum(is.na(activities))
+```
 
+Show summary of complete table:
+```{r}
+summary(activities)
+```
+This shows that only the steps column has missing values.
+
+Imputing missing values with the mean value of that interval over the different days:
+```{r}
+activitiesImputed <- activities
+activitiesImputed$meanSteps <- rep(round(intervalSummary$averageSteps),nrow(activitiesImputed)/nrow(intervalSummary))
+
+activitiesImputed$steps <- ifelse(is.na(activitiesImputed$steps),activitiesImputed$meanSteps,activitiesImputed$steps)
+```
+
+Histogram of steps per day on imputed data:
+```{r}
+groupedActivities <- group_by(activitiesImputed, date)
+stepsSummarized <- summarise(groupedActivities, stepsPerDay = sum(steps,na.rm = TRUE))
+qplot(stepsSummarized$stepsPerDay, binwidth=1500)
+```
+
+Mean and median of total steps per day from imputed data:
+```{r}
+mean(stepsSummarized$stepsPerDay)
+median(stepsSummarized$stepsPerDay)
+```
+
+Absolute difference between original data and imputed data for the mean and median of total steps per day:
+```{r}
+abs(mean(stepsSummarized$stepsPerDay) - mean(stepsPerDay$stepsPerDay))
+abs(median(stepsSummarized$stepsPerDay) - median(stepsPerDay$stepsPerDay))
+```
+There clearly is a difference between the original data and the imputed data. Especially the mean has increased a lot, and also moved towards the median more. This makes sense, since the median is a measure that is less sensitive to noise.
+
+Next to this, you can see that the the histogram has a shape that resembles a normal distribution more than the histogram of the original data.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r}
+factorLevels <- c("weekday","weekend")
+dayWeekendFactor <- factor(factorLevels,levels = factorLevels)
+activitiesImputed$dayWeekend <- ifelse(wday(activitiesImputed$date) %in% c(1,7),levels(dayWeekendFactor)[2],levels(dayWeekendFactor)[1])
+groupedInterval <- group_by(activitiesImputed,interval,dayWeekend)
+intervalSummary <- summarise(groupedInterval, averageSteps = mean(steps,na.rm= TRUE))
+plot <- ggplot(intervalSummary,aes(x = interval, y = averageSteps)) + geom_line()
+plot + facet_grid(dayWeekend ~ .)
+```
